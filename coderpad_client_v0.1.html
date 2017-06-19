@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>WebSocket demo</title>
+    </head>
+    <body>
+
+    <label for="server">server</label>
+    <input type="text" value="ws://127.0.0.1:11234" id="server">
+    <p></p>
+    <label for="user_name">user_name</label>
+    <input type="text" value="test" id="user_name">
+    <p></p>
+    <label for="password">password</label>
+    <input type="text" value="test" id="password">
+    <p></p>
+    <button id="connect" onclick="do_connect()" >connect</button>
+    <button id="disconnect" onclick="do_disconnect()" >disconnect</button>
+
+    <p></p>
+    <select id="pad_select" onchange="do_pad_select_chagne()" >
+    </select>
+    <button id="goto" onclick="do_goto()" >go into this pad</button>
+    <button id="delete_one_pad" onclick="do_delete_one_pad()" >delete one pad</button>
+    <button id="refresh_pad_list" onclick="do_refresh_pad_list()" >refresh pad list</button>
+    <p></p>
+    <label for="new_pad_name">new pad name</label>
+    <input type="text" value="test" id="new_pad_name">
+    <button id="create_new_pad" onclick="do_create_new_pad()" >create new pad</button>
+    <p></p>
+
+    <p></p>
+    <input type="text" id="current_pad_name">current_pad_name</input>
+    <p></p>
+    <canvas id="mycanvas" width="200" height="100" >your browser does NOT SUPPORT canvas. try newer browser please.</canvas>
+
+    <p></p>
+
+    <button id="init_data" onclick="do_init_data()" >init data</button>
+    <button id="reload_data" onclick="do_reload_data()" >reload data</button>
+
+
+    <p></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <p></p>
+    <textarea id="infos"></textarea>
+    <button id="clear_infos" onclick="do_clear_infos()" >clear_infos</button>
+    <p></p>
+
+
+    <script>
+        
+        window.onload=function () {
+            var mcanvas = document.getElementById('mycanvas')
+            mcanvas.addEventListener('mousemove', do_mouse_move_canvas, false)
+
+        }
+
+
+
+        function getPointOnCanvas(canvas, x, y) {
+            var bbox =canvas.getBoundingClientRect();
+            return { x: x- bbox.left *(canvas.width / bbox.width),
+                y:y - bbox.top * (canvas.height / bbox.height)
+            };
+        }
+        function do_mouse_move_canvas(event) {
+            var mcanvas = document.getElementById('mycanvas');
+            var x=event.clientX;
+            var y=event.clientY;
+            var button = event.button;//0--left 1--middle. 2-right
+            var loc = getPointOnCanvas(mcanvas, x,y);
+            //#console.log(x+","+y);
+            x=loc.x;
+            y=loc.y;
+            //#console.log(loc.x+","+loc.y);
+
+            if (button==1)
+            {
+                var pad_name = document.getElementById('new_pad_name').value;
+                var pindex=(mcanvas.width*y+x)*4;
+                var mdict = {}
+                mdict[String(pindex)]=255 ;//R
+                mdict[String(pindex+1)]=0 ;//G
+                mdict[String(pindex+2)]=0;//B
+                mdict[String(pindex+3)]=255;//A
+                coderpad_replace_data(pad_name,mdict);
+            }
+        }
+        function coderpad_data_change_callback(new_data)
+        {
+            var mcanvas = document.getElementById('mycanvas')
+            var ctx = mcanvas.getContext('2d')
+            var rdata = ctx.getImageData(0,0,mcanvas.width, mcanvas.height)
+            var i=0;
+            console.log('coderpad_data_change_callback:before change:', rdata);
+            console.log('change data:', new_data)
+            for ( i in new_data)
+                rdata.data[i]= new_data[i]
+            console.log('after change:', rdata)
+            ctx.putImageData(rdata,0,0)
+        }
+        
+        function do_connect()
+        {
+            var user_name = document.getElementById('user_name').value
+            var password = document.getElementById('password').value
+            var servername=document.getElementById('server').value
+            coderpad_connect(servername, user_name, password)
+        }
+        
+        function do_disconnect() {
+            coderpad_disconnect()
+        }
+        function do_pad_select_chagne()
+        {
+            //do something here?
+        }
+        function do_create_new_pad() {
+            var pad_name = document.getElementById('new_pad_name').value
+            coderpad_create_new_pad(pad_name)
+        }
+        function do_delete_one_pad() {
+            var padlist = document.getElementById('pad_select')
+            var padname = padlist.options[padlist.selectedIndex].text
+            coderpad_delete_pad(padname)
+        }
+        function do_refresh_pad_list() {
+            coderpad_listpads()
+        }
+        
+        function do_clear_infos()
+        {
+            var infos = document.getElementById('infos')
+            infos.value=''
+        }
+        function do_goto() {
+            var padlist = document.getElementById('pad_select')
+            var padname = padlist.options[padlist.selectedIndex].text
+            coderpad_goto(padname)
+        }
+        function do_init_data() {
+            var pad_name = document.getElementById('current_pad_name').value
+            var mcanvas = document.getElementById('mycanvas')
+            var ctx = mcanvas.getContext('2d')
+            ctx.fillStyle='green'
+            ctx.fillRect(0,0,mcanvas.width, mcanvas.height)
+            var rdata = ctx.getImageData(0,0,mcanvas.width, mcanvas.height)
+            console.log(rdata)
+            coderpad_set_data(pad_name,rdata.data)
+        }
+        function do_reload_data(){
+            var pad_name = document.getElementById('current_pad_name').value
+            coderpad_getAll(pad_name)
+        }
+
+        function update_current_pad_name_to_ui(pad_name) {
+            document.getElementById('current_pad_name').value = pad_name
+        }
+
+        function write_infos(msg)
+        {
+            var infos = document.getElementById('infos')
+            infos.value=infos.value+msg+'\r\n'
+        }
+
+        function  update_pad_name_to_ui(pad_name_list) {
+            var padlist = document.getElementById('pad_select')
+            var ml = padlist.length
+            var i = 0
+            for (i=0;i<ml;++i)
+            {
+                padlist.remove(0)
+            }
+
+            for (i=0;i<pad_name_list.length;++i)
+            {
+                var tmp=document.createElement('option');
+                tmp.text = pad_name_list[i]
+                try{
+                    padlist.add(tmp, null)
+                }
+                catch (ex){
+                    padlist.add(tmp)
+                }
+            }
+
+
+            
+        }
+
+
+
+    </script>
+
+
+
+
+
+
+
+
+
+        <script>
+
+
+
+            var g_socket=null;
+            function coderpad_message_recv(e) {
+                if (typeof e.data =='string')
+                {
+                    console.log('string message received:',e,e.data)
+                    var mdata = JSON.parse(e.data)
+                    console.log('cmd got:',mdata['cmd'])
+                    if (mdata['cmd']=='listpads')
+                    {
+                        update_pad_name_to_ui(mdata['pads'])
+                    }
+                    else if (mdata['cmd']=='goto')
+                    {
+                        update_current_pad_name_to_ui(mdata['pad_name'])
+                    }
+                    else if ((mdata['cmd']=='replace')||(mdata['cmd']=='getAll'))
+                    {
+                        //#new replace data here
+                        coderpad_data_change_callback(mdata['data'])
+                    }
+
+
+
+                }
+                else
+                {
+                    console.log('other message received:',e,e.data)
+                }
+            }
+
+            function coderpad_disconnect() {
+                g_socket.close()
+                g_socket=null
+            }
+            function coderpad_connect(servername, user_name, password)
+            {
+                write_infos('coderpad_connect:'+servername+user_name+password)
+                g_socket = new WebSocket(servername)
+                g_socket.onmessage = coderpad_message_recv
+                g_socket.onopen=function (e){
+                    coderpad_listpads()
+                }
+                g_socket.onclose=function (e) {
+                    console.log('connection closed',e)
+                }
+
+                update_pad_name_to_ui(['pad1', 'pad2'])
+            }
+
+            function  coderpad_goto(pad_name) {
+                console.log('coderpad_goto:'+pad_name)
+                g_socket.send(JSON.stringify({'cmd':'goto', 'pad_name':pad_name})  )
+            }
+            function  coderpad_listpads() {
+                console.log('coderpad_listpads:')
+                g_socket.send(JSON.stringify({'cmd':'listpads'})  )
+            }
+            function coderpad_create_new_pad(pad_name) {
+                console.log('coderpad_create_new_pad:'+pad_name)
+                g_socket.send(JSON.stringify({'cmd':'create', 'pad_name':pad_name})  )
+            }
+            function coderpad_delete_pad(pad_name) {
+                console.log('coderpad_delete_pad:'+pad_name)
+                g_socket.send(JSON.stringify({'cmd':'delete', 'pad_name':pad_name})  )
+            }
+
+            function coderpad_set_data(pad_name, newdata) {
+                g_socket.send(JSON.stringify({'cmd':'set', 'pad_name':pad_name, 'data':newdata})  )
+            }
+            function coderpad_replace_data(pad_name, newdata) {
+                g_socket.send(JSON.stringify({'cmd':'replace', 'pad_name':pad_name, 'data':newdata})  )
+            }
+            function coderpad_getAll(pad_name) {
+                g_socket.send(JSON.stringify({'cmd':'getAll', 'pad_name':pad_name})  )
+            }
+        </script>
+    </body>
+</html>
